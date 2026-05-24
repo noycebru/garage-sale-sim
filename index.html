@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Garage Sale Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header id="top-bar">
+    <div id="money-display">
+      <span class="label">💰 Cash</span>
+      <span id="cash-amount">$0.00</span>
+    </div>
+    <div id="house-display">
+      <span id="house-name">Starter House</span>
+    </div>
+    <div id="inv-display">
+      <span class="label">📦 Inventory</span>
+      <span id="inv-count">0 / 20</span>
+    </div>
+  </header>
+
+  <!-- MAIN GAME AREA -->
+  <main id="game-area">
+
+    <!-- HOUSE VIEW -->
+    <section id="house-view" class="view active">
+      <div id="house-header">
+        <h2>🏠 Your House</h2>
+        <p id="house-subtitle">Search rooms to find items to sell!</p>
+      </div>
+
+      <div id="rooms-grid">
+        <!-- Rooms injected by house.js -->
+      </div>
+
+      <div id="inventory-panel">
+        <h3>📦 Inventory <span id="inv-label">(0 items)</span></h3>
+        <div id="inventory-grid">
+          <!-- Items injected here -->
+        </div>
+      </div>
+
+      <button id="go-to-sale-btn" class="big-btn" disabled>
+        🪑 Set Up Garage Sale
+      </button>
+    </section>
+
+    <!-- ROOM SEARCH MODAL -->
+    <div id="room-modal" class="modal hidden">
+      <div class="modal-box">
+        <div id="modal-room-header">
+          <span id="modal-room-icon">🛋️</span>
+          <h3 id="modal-room-name">Living Room</h3>
+        </div>
+        <p id="modal-room-desc">Rummaging through the room...</p>
+        <div id="modal-find-area">
+          <!-- Found item or empty result shown here -->
+        </div>
+        <div id="modal-actions">
+          <button id="search-again-btn" class="btn-secondary">🔍 Search Again</button>
+          <button id="close-modal-btn" class="btn-primary">Done</button>
+        </div>
+        <div id="modal-cooldown-msg" class="hidden">⏳ Room needs time to reset...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- BOTTOM NAV -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" data-view="house-view">🏠 House</button>
+    <button class="nav-btn" data-view="sale-view" id="sale-nav-btn" disabled>🏷️ Sale</button>
+  </nav>
+
+  <script src="js/items.js"></script>
+  <script src="js/house.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
