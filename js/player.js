@@ -186,9 +186,10 @@ const Player = (() => {
     if (keys.d) mx += 1;
 
     // Joystick overrides if active
+    // moveDir.x = horizontal stick = strafe, moveDir.y = vertical stick = forward/back
     if (joystickActive) {
-      mx = moveDir.x;
-      mz = moveDir.y;
+      mx =  moveDir.x;
+      mz = -moveDir.y;  // invert Y: push stick up (negative screen Y) = move forward (negative world Z)
     }
 
     // Normalize diagonal
