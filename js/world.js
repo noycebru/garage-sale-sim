@@ -14,8 +14,6 @@ const World = (() => {
   let physics;
   let scene;
 
-  const loader = new THREE.GLTFLoader();
-
   const C = {
     wall:      0xf0e8d8,
     wall_bath: 0xe8f0f5,
@@ -457,6 +455,49 @@ const World = (() => {
   //   MBath:   x:6.75, z:-3   (x:3.5..10, z:-4..-2)
   // ----------------------------------------
   function buildFurniture() {
+    if (typeof THREE.GLTFLoader !== 'function') {
+      console.error('[World] THREE.GLTFLoader is not available — furniture skipped. Verify GLTFLoader.js loaded before world.js.');
+      return;
+    }
+
+    const loader = new THREE.GLTFLoader();
+
+    // placeModel is a closure over `loader`, `scene`, `physics`
+    function placeModel(path, x, y, z, rotY) {
+      loader.load(
+        path,
+        gltf => {
+          const model = gltf.scene;
+          model.position.set(x, y, z);
+          model.rotation.y = rotY;
+          model.traverse(child => {
+            if (child.isMesh) {
+              child.castShadow    = true;
+              child.receiveShadow = true;
+            }
+          });
+          scene.add(model);
+
+          // Compute world-space AABB after transforms applied
+          model.updateMatrixWorld(true);
+          const box3 = new THREE.Box3().setFromObject(model);
+          if (!box3.isEmpty()) {
+            const size   = new THREE.Vector3();
+            const center = new THREE.Vector3();
+            box3.getSize(size);
+            box3.getCenter(center);
+            addStaticBox(
+              center.x, center.y, center.z,
+              Math.max(size.x / 2, 0.01),
+              Math.max(size.y / 2, 0.01),
+              Math.max(size.z / 2, 0.01)
+            );
+          }
+        },
+        undefined,
+        err => console.error('[World] Model load FAILED:', path, err)
+      );
+    }
 
     // ── LIVING ROOM ──────────────────────────────────
     // Sofa against south wall, facing north (rotY = PI)
@@ -542,46 +583,6 @@ const World = (() => {
     placeModel('assets/models/furniture/bathroomSink.glb',         7.0,   0,   -3.5,  0);
     placeModel('assets/models/furniture/bathroomMirror.glb',       7.0,   1.1, -3.82, 0);
     placeModel('assets/models/furniture/bathroomCabinetDrawer.glb',8.0,   0,   -3.5,  0);
-  }
-
-  // ----------------------------------------
-  // placeModel — async GLB load, auto physics
-  // ----------------------------------------
-  function placeModel(path, x, y, z, rotY) {
-    loader.load(
-      path,
-      gltf => {
-        const model = gltf.scene;
-        model.position.set(x, y, z);
-        model.rotation.y = rotY;
-        model.traverse(child => {
-          if (child.isMesh) {
-            child.castShadow    = true;
-            child.receiveShadow = true;
-          }
-        });
-        scene.add(model);
-
-        // Compute world-space AABB after transforms applied
-        model.updateMatrixWorld(true);
-        const box3 = new THREE.Box3().setFromObject(model);
-        if (!box3.isEmpty()) {
-          const size   = new THREE.Vector3();
-          const center = new THREE.Vector3();
-          box3.getSize(size);
-          box3.getCenter(center);
-          // Guard against degenerate zero-size axes
-          addStaticBox(
-            center.x, center.y, center.z,
-            Math.max(size.x / 2, 0.01),
-            Math.max(size.y / 2, 0.01),
-            Math.max(size.z / 2, 0.01)
-          );
-        }
-      },
-      undefined,
-      err => console.warn('[World] Failed to load ' + path, err)
-    );
   }
 
   // ----------------------------------------

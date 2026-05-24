@@ -44,7 +44,11 @@ function init() {
   setupLighting();
 
   // Build 3D world + register physics bodies
-  World.build(scene, physicsWorld);
+  try {
+    World.build(scene, physicsWorld);
+  } catch (e) {
+    console.error('[Main] World.build() threw — house may be incomplete:', e);
+  }
 
   // Player physics body — capsule approximated as sphere
   const playerShape = new CANNON.Sphere(0.4);
