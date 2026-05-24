@@ -32,7 +32,7 @@ const Objects = (() => {
   // ----------------------------------------
   // init(sceneRef, cameraRef)
   // ----------------------------------------
-  function init(sceneRef, cameraRef) {
+  function init(sceneRef, cameraRef, physicsWorld) {
     scene  = sceneRef;
     camera = cameraRef;
 

@@ -1,17 +1,17 @@
 // ================================
 // player.js — First-Person Controller
+// Uses cannon-es for physics body
 // ================================
 
 const Player = (() => {
 
-  const SPEED      = 5.0;
-  const EYE_HEIGHT = 1.7;
-  const LOOK_SENS  = 0.006;
-  const TOUCH_SENS = 0.010;
+  const EYE_HEIGHT   = 1.7;
+  const MOVE_SPEED   = 12;       // impulse force
+  const LOOK_SENS    = 0.006;
+  const TOUCH_SENS   = 0.010;
   const JOYSTICK_MAX = 45;
-  const PLAYER_RADIUS = 0.3;
 
-  let camera, domElement;
+  let camera, body;
 
   let yaw   = 0;
   let pitch = 0;
@@ -19,23 +19,22 @@ const Player = (() => {
 
   const keys = { w: false, a: false, s: false, d: false };
 
-  let pointerLocked = false;
+  let pointerLocked    = false;
+  let joystickActive   = false;
+  let joystickTouchId  = null;
+  let joystickOrigin   = { x: 0, y: 0 };
+  let joyX = 0;
+  let joyY = 0;
 
-  // Joystick
-  let joystickActive = false;
-  let joystickTouchId = null;
-  let joystickOrigin = { x: 0, y: 0 };
-  let joyX = 0; // -1 to +1
-  let joyY = 0; // -1 to +1
-
-  // Look touch
   let lookTouchId = null;
-  let lookLast = { x: 0, y: 0 };
+  let lookLast    = { x: 0, y: 0 };
 
   // ----------------------------------------
-  function init(cam, el) {
+  // init(cam, physicsBody)
+  // ----------------------------------------
+  function init(cam, physicsBody) {
     camera = cam;
-    domElement = el;
+    body   = physicsBody;
     setupDesktop();
     setupMobile();
   }
@@ -44,13 +43,15 @@ const Player = (() => {
   // DESKTOP
   // ----------------------------------------
   function setupDesktop() {
-    domElement.addEventListener('click', () => {
+    const canvas = document.getElementById('game-canvas');
+
+    canvas.addEventListener('click', () => {
       if (!GameState.started) return;
-      domElement.requestPointerLock();
+      canvas.requestPointerLock();
     });
 
     document.addEventListener('pointerlockchange', () => {
-      pointerLocked = document.pointerLockElement === domElement;
+      pointerLocked = document.pointerLockElement === canvas;
     });
 
     document.addEventListener('mousemove', e => {
@@ -61,7 +62,7 @@ const Player = (() => {
     });
 
     document.addEventListener('keydown', e => {
-      switch(e.key.toLowerCase()) {
+      switch (e.key.toLowerCase()) {
         case 'w': case 'arrowup':    keys.w = true; break;
         case 's': case 'arrowdown':  keys.s = true; break;
         case 'a': case 'arrowleft':  keys.a = true; break;
@@ -71,7 +72,7 @@ const Player = (() => {
     });
 
     document.addEventListener('keyup', e => {
-      switch(e.key.toLowerCase()) {
+      switch (e.key.toLowerCase()) {
         case 'w': case 'arrowup':    keys.w = false; break;
         case 's': case 'arrowdown':  keys.s = false; break;
         case 'a': case 'arrowleft':  keys.a = false; break;
@@ -81,15 +82,13 @@ const Player = (() => {
   }
 
   // ----------------------------------------
-  // MOBILE — joystick and look are completely
-  // separate touch handlers to avoid conflicts
+  // MOBILE
   // ----------------------------------------
   function setupMobile() {
     const joystickZone = document.getElementById('joystick-zone');
     const knob         = document.getElementById('joystick-knob');
     const base         = document.getElementById('joystick-base');
 
-    // --- JOYSTICK: only listens on joystick zone element ---
     joystickZone.addEventListener('touchstart', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -105,9 +104,7 @@ const Player = (() => {
       e.preventDefault();
       e.stopPropagation();
       for (const t of e.changedTouches) {
-        if (t.identifier === joystickTouchId) {
-          updateJoystick(t.clientX, t.clientY, knob);
-        }
+        if (t.identifier === joystickTouchId) updateJoystick(t.clientX, t.clientY, knob);
       }
     }, { passive: false });
 
@@ -115,46 +112,42 @@ const Player = (() => {
       e.preventDefault();
       for (const t of e.changedTouches) {
         if (t.identifier === joystickTouchId) {
-          joystickActive = false;
+          joystickActive  = false;
           joystickTouchId = null;
-          joyX = 0;
-          joyY = 0;
+          joyX = 0; joyY = 0;
           knob.style.transform = 'translate(-50%, -50%)';
         }
       }
     }, { passive: false });
 
-    // --- LOOK: listens on canvas, ignores left 35% (joystick area) ---
-    domElement.addEventListener('touchstart', e => {
+    const canvas = document.getElementById('game-canvas');
+
+    canvas.addEventListener('touchstart', e => {
       for (const t of e.changedTouches) {
-        const isRightSide = t.clientX > window.innerWidth * 0.35;
-        if (isRightSide && lookTouchId === null) {
+        if (t.clientX > window.innerWidth * 0.35 && lookTouchId === null) {
           lookTouchId = t.identifier;
-          lookLast = { x: t.clientX, y: t.clientY };
+          lookLast    = { x: t.clientX, y: t.clientY };
         }
       }
     }, { passive: true });
 
-    domElement.addEventListener('touchmove', e => {
+    canvas.addEventListener('touchmove', e => {
       for (const t of e.changedTouches) {
         if (t.identifier === lookTouchId) {
-          const dx = t.clientX - lookLast.x;
-          const dy = t.clientY - lookLast.y;
-          yaw   -= dx * TOUCH_SENS;
-          pitch -= dy * TOUCH_SENS;
+          yaw   -= (t.clientX - lookLast.x) * TOUCH_SENS;
+          pitch -= (t.clientY - lookLast.y) * TOUCH_SENS;
           pitch  = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
           lookLast = { x: t.clientX, y: t.clientY };
         }
       }
     }, { passive: true });
 
-    domElement.addEventListener('touchend', e => {
+    canvas.addEventListener('touchend', e => {
       for (const t of e.changedTouches) {
         if (t.identifier === lookTouchId) lookTouchId = null;
       }
     });
 
-    // Interact button
     const btn = document.getElementById('interact-btn');
     btn.addEventListener('touchstart', e => { e.preventDefault(); triggerInteract(); }, { passive: false });
     btn.addEventListener('click', triggerInteract);
@@ -165,65 +158,47 @@ const Player = (() => {
     let dx = cx - joystickOrigin.x;
     let dy = cy - joystickOrigin.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > JOYSTICK_MAX) {
-      dx = (dx / dist) * JOYSTICK_MAX;
-      dy = (dy / dist) * JOYSTICK_MAX;
-    }
+    if (dist > JOYSTICK_MAX) { dx = dx / dist * JOYSTICK_MAX; dy = dy / dist * JOYSTICK_MAX; }
     joyX = dx / JOYSTICK_MAX;
     joyY = dy / JOYSTICK_MAX;
     knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
   }
 
   // ----------------------------------------
-  // update(delta)
+  // update(delta) — apply forces to physics body
   // ----------------------------------------
   function update(delta) {
+    // Input
     let fwd = 0, strafe = 0;
-
-    // Keyboard
     if (keys.w) fwd    += 1;
     if (keys.s) fwd    -= 1;
     if (keys.d) strafe += 1;
     if (keys.a) strafe -= 1;
+    if (joystickActive) { fwd = -joyY; strafe = joyX; }
 
-    // Joystick — joyY: up = negative = forward
-    if (joystickActive) {
-      fwd    = -joyY;
-      strafe =  joyX;
-    }
-
-    // Forward vector from yaw only (ignore pitch for movement)
+    // Direction vectors from yaw
     const sinY = Math.sin(yaw);
     const cosY = Math.cos(yaw);
+    const fx = -sinY, fz = -cosY;  // forward
+    const rx =  cosY, rz = -sinY;  // right
 
-    const fx =  -sinY;  // forward X
-    const fz =  -cosY;  // forward Z
-    const rx =   cosY;  // right X
-    const rz =  -sinY;  // right Z
-
-    // Combined move vector
     let mx = fx * fwd + rx * strafe;
     let mz = fz * fwd + rz * strafe;
-
-    // Normalize diagonal
     const len = Math.sqrt(mx * mx + mz * mz);
     if (len > 1) { mx /= len; mz /= len; }
 
-    // Move with wall sliding — try X and Z independently
-    const nx = camera.position.x + mx * SPEED * delta;
-    const nz = camera.position.z + mz * SPEED * delta;
+    // Set velocity directly on physics body (no sliding issues)
+    body.velocity.x = mx * MOVE_SPEED;
+    body.velocity.z = mz * MOVE_SPEED;
+    // Lock Y velocity so player doesn't float/sink
+    body.velocity.y = 0;
+    // Lock angular velocity so player doesn't spin
+    body.angularVelocity.set(0, 0, 0);
 
-    if (!World.checkCollision(nx, camera.position.z, PLAYER_RADIUS)) {
-      camera.position.x = nx;
-    }
-    if (!World.checkCollision(camera.position.x, nz, PLAYER_RADIUS)) {
-      camera.position.z = nz;
-    }
-
-    // World bounds
-    camera.position.x = Math.max(-11.5, Math.min(11.5, camera.position.x));
-    camera.position.z = Math.max(-4.5,  Math.min(21.0, camera.position.z));
-    camera.position.y = EYE_HEIGHT;
+    // Sync camera to physics body position
+    camera.position.x = body.position.x;
+    camera.position.y = body.position.y + EYE_HEIGHT;
+    camera.position.z = body.position.z;
 
     // Apply look
     camera.rotation.order = 'YXZ';
@@ -237,12 +212,7 @@ const Player = (() => {
   }
 
   function getPosition()  { return camera.position.clone(); }
-  function getDirection() {
-    const dir = new THREE.Vector3(0, 0, -1);
-    dir.applyEuler(camera.rotation);
-    return dir;
-  }
 
-  return { init, update, getPosition, getDirection };
+  return { init, update, getPosition };
 
 })();

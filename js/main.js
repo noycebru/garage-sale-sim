@@ -1,9 +1,8 @@
 // ================================
 // main.js — Core Game Loop
-// Three.js init, lighting, RAF
+// Three.js + cannon-es physics
 // ================================
 
-// ---- Game State ----
 const GameState = {
   cash:        0,
   houseLevel:  1,
@@ -13,11 +12,11 @@ const GameState = {
   started:     false,
 };
 
-// ---- Three.js globals ----
 let renderer, scene, camera, clock;
+let physicsWorld, playerBody;
 
 // ----------------------------------------
-// init() — set up Three.js + systems
+// init()
 // ----------------------------------------
 function init() {
   const canvas = document.getElementById('game-canvas');
@@ -29,31 +28,46 @@ function init() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 
-  // Scene
-  scene = new THREE.Scene();
-
-  // Camera (first-person)
+  // Scene + Camera
+  scene  = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+  clock  = new THREE.Clock();
 
-  // Clock
-  clock = new THREE.Clock();
+  // Physics world
+  physicsWorld = new CANNON.World({
+    gravity: new CANNON.Vec3(0, -20, 0),
+  });
+  physicsWorld.broadphase = new CANNON.SAPBroadphase(physicsWorld);
+  physicsWorld.allowSleep = true;
 
   // Lighting
   setupLighting();
 
-  // Build world
-  World.build(scene);
+  // Build 3D world + register physics bodies
+  World.build(scene, physicsWorld);
+
+  // Player physics body — capsule approximated as sphere
+  const playerShape = new CANNON.Sphere(0.4);
+  playerBody = new CANNON.Body({
+    mass: 1,
+    shape: playerShape,
+    fixedRotation: true,        // don't tip over
+    linearDamping:  0.99,       // stop quickly when no input
+    angularDamping: 1.0,
+  });
+  const spawn = World.getSpawnPoint();
+  playerBody.position.set(spawn.x, 0.4, spawn.z);
+  physicsWorld.addBody(playerBody);
 
   // Init systems
-  Player.init(camera, canvas);
-  Objects.init(scene, camera);
+  Player.init(camera, playerBody);
+  Objects.init(scene, camera, physicsWorld);
   UI.updateHUD();
   UI.renderInventoryBar();
 
-  // Resize handler
   window.addEventListener('resize', onResize);
 
-  // Loading bar animation
+  // Loading bar then start screen
   animateLoadingBar(() => {
     document.getElementById('loading-screen').classList.add('fade-out');
     setTimeout(() => {
@@ -62,74 +76,56 @@ function init() {
     }, 500);
   });
 
-  // Start button
   document.getElementById('start-btn').addEventListener('click', startGame);
 
-  // Start RAF
   requestAnimationFrame(loop);
 }
 
 // ----------------------------------------
-// setupLighting
-// ----------------------------------------
 function setupLighting() {
-  // Ambient
-  const ambient = new THREE.AmbientLight(0xfff5e0, 0.7);
-  scene.add(ambient);
+  scene.add(new THREE.AmbientLight(0xfff5e0, 0.75));
 
-  // Sun (directional)
-  const sun = new THREE.DirectionalLight(0xfff8e7, 0.9);
-  sun.position.set(8, 12, -6);
+  const sun = new THREE.DirectionalLight(0xfff8e7, 1.0);
+  sun.position.set(10, 18, 8);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.camera.near = 0.5;
-  sun.shadow.camera.far  = 50;
-  sun.shadow.camera.left = sun.shadow.camera.bottom = -20;
-  sun.shadow.camera.right = sun.shadow.camera.top   =  20;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -25;
+  sun.shadow.camera.right = sun.shadow.camera.top   =  25;
+  sun.shadow.camera.far   = 60;
   scene.add(sun);
 
-  // Warm fill (inside house feel)
-  const fill = new THREE.PointLight(0xffddaa, 0.6, 15);
-  fill.position.set(0, 2.5, 0);
-  scene.add(fill);
-
-  // Kitchen light
-  const kitchenLight = new THREE.PointLight(0xffffff, 0.5, 8);
-  kitchenLight.position.set(7.5, 2.8, 0);
-  scene.add(kitchenLight);
-
-  // Bedroom light
-  const bedLight = new THREE.PointLight(0xffe0ff, 0.4, 8);
-  bedLight.position.set(-7.5, 2.8, 0);
-  scene.add(bedLight);
+  // Interior fill lights
+  [[0, 2.5, 2,   0xffddaa, 12],   // living room
+   [0, 2.5, -2,  0xffffff, 10],   // kitchen
+   [7, 2.5,  2,  0xffeedd, 8 ],   // master bed
+   [-7,2.5,  2,  0xeeeeff, 8 ],   // bed 2
+  ].forEach(([x, y, z, color, dist]) => {
+    const light = new THREE.PointLight(color, 0.6, dist);
+    light.position.set(x, y, z);
+    scene.add(light);
+  });
 }
 
-// ----------------------------------------
-// startGame
 // ----------------------------------------
 function startGame() {
   document.getElementById('start-screen').classList.add('hidden');
   GameState.started = true;
 
-  // On desktop, request pointer lock
-  const canvas = document.getElementById('game-canvas');
+  // Pointer lock on desktop
   if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-    canvas.requestPointerLock();
+    document.getElementById('game-canvas').requestPointerLock();
   }
-
-  // Move camera to spawn
-  const spawn = World.getSpawnPoint();
-  camera.position.copy(spawn);
 }
 
 // ----------------------------------------
-// Main game loop
+// Main loop
 // ----------------------------------------
 function loop() {
   requestAnimationFrame(loop);
-  const delta = Math.min(clock.getDelta(), 0.05); // cap delta
+  const delta = Math.min(clock.getDelta(), 0.05);
 
   if (GameState.started) {
+    physicsWorld.step(1 / 60, delta, 3);
     Player.update(delta);
     Objects.update(delta);
   }
@@ -138,8 +134,6 @@ function loop() {
 }
 
 // ----------------------------------------
-// onResize
-// ----------------------------------------
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -147,31 +141,21 @@ function onResize() {
 }
 
 // ----------------------------------------
-// animateLoadingBar(onDone)
-// ----------------------------------------
 function animateLoadingBar(onDone) {
   const bar = document.getElementById('loading-bar');
-  let progress = 0;
   const steps = [
     { target: 30,  delay: 100 },
     { target: 65,  delay: 300 },
     { target: 85,  delay: 200 },
     { target: 100, delay: 400 },
   ];
-
   let i = 0;
   function step() {
     if (i >= steps.length) { onDone(); return; }
     const s = steps[i++];
-    setTimeout(() => {
-      bar.style.width = s.target + '%';
-      step();
-    }, s.delay);
+    setTimeout(() => { bar.style.width = s.target + '%'; step(); }, s.delay);
   }
   step();
 }
 
-// ----------------------------------------
-// Boot
-// ----------------------------------------
 window.addEventListener('DOMContentLoaded', init);

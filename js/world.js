@@ -12,8 +12,7 @@ const World = (() => {
   const DOOR_W  = 1.0;
   const DOOR_H  = 2.2;
 
-  // Collision boxes for player (AABB)
-  const colliders = [];
+  let physics; // cannon-es World reference
 
   const C = {
     wall:       0xf0e8d8,
@@ -73,8 +72,9 @@ const World = (() => {
   //   bed3/kitchen divider at x = -3.5
   //   kitchen/utility divider at x = +3.5
 
-  function build(sceneRef) {
-    scene = sceneRef;
+  function build(sceneRef, physicsWorld) {
+    scene   = sceneRef;
+    physics = physicsWorld;
     scene.background = new THREE.Color(0x87ceeb);
     scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
 
@@ -95,6 +95,12 @@ const World = (() => {
   // Sidewalk at z=20
   // ----------------------------------------
   function buildOutdoor() {
+    // Cannon ground plane (infinite, mass=0)
+    const groundBody = new CANNON.Body({ mass: 0 });
+    groundBody.addShape(new CANNON.Plane());
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    groundBody.position.set(0, 0, 0);
+    physics.addBody(groundBody);
     // Base grass (whole world)
     const grass = makePlane(120, 120, C.grass);
     grass.rotation.x = -Math.PI / 2;
@@ -362,6 +368,7 @@ const World = (() => {
   function solidWall(cx, cz, length, axis, color) {
     const w = axis === 'H' ? length : WALL_T;
     const d = axis === 'H' ? WALL_T : length;
+    // Three.js visual
     const geo  = new THREE.BoxGeometry(w, WALL_H, d);
     const mat  = new THREE.MeshLambertMaterial({ color });
     const mesh = new THREE.Mesh(geo, mat);
@@ -369,14 +376,8 @@ const World = (() => {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
-
-    // Add collider
-    colliders.push({
-      minX: cx - w / 2 - 0.1,
-      maxX: cx + w / 2 + 0.1,
-      minZ: cz - d / 2 - 0.1,
-      maxZ: cz + d / 2 + 0.1,
-    });
+    // Cannon physics body (static)
+    addStaticBox(cx, WALL_H / 2, cz, w / 2, WALL_H / 2, d / 2);
   }
 
   // ----------------------------------------
@@ -642,14 +643,8 @@ const World = (() => {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
-
-    // Furniture collider
-    colliders.push({
-      minX: x - w / 2 - 0.1,
-      maxX: x + w / 2 + 0.1,
-      minZ: z - d / 2 - 0.1,
-      maxZ: z + d / 2 + 0.1,
-    });
+    // Static physics body for collision
+    addStaticBox(x, y + h / 2, z, w / 2, h / 2, d / 2);
     return mesh;
   }
 
@@ -696,20 +691,14 @@ const World = (() => {
   }
 
   // ----------------------------------------
-  // COLLISION — check player AABB vs colliders
+  // addStaticBox — adds a static cannon body
+  // hx/hy/hz are half-extents
   // ----------------------------------------
-  function checkCollision(newX, newZ, radius) {
-    for (const c of colliders) {
-      if (
-        newX + radius > c.minX &&
-        newX - radius < c.maxX &&
-        newZ + radius > c.minZ &&
-        newZ - radius < c.maxZ
-      ) {
-        return true; // collision
-      }
-    }
-    return false;
+  function addStaticBox(cx, cy, cz, hx, hy, hz) {
+    const shape = new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    const body  = new CANNON.Body({ mass: 0, shape });
+    body.position.set(cx, cy, cz);
+    physics.addBody(body);
   }
 
   function makePlane(w, d, color) {
@@ -719,9 +708,9 @@ const World = (() => {
   }
 
   function getSpawnPoint() {
-    return new THREE.Vector3(0, 1.7, 2.5); // living room center
+    return new THREE.Vector3(0, 0.4, 2.5);
   }
 
-  return { build, getSpawnPoint, checkCollision };
+  return { build, getSpawnPoint };
 
 })();
