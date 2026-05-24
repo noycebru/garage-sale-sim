@@ -8,8 +8,8 @@ const Player = (() => {
 
   const SPEED      = 4.5;   // units/sec
   const EYE_HEIGHT = 1.7;
-  const LOOK_SENS  = 0.0025; // mouse sensitivity
-  const TOUCH_SENS = 0.004;  // touch look sensitivity
+  const LOOK_SENS  = 0.006;  // mouse sensitivity (increased)
+  const TOUCH_SENS = 0.010;  // touch look sensitivity (increased)
 
   let camera, domElement;
 

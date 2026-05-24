@@ -1,266 +1,358 @@
 // ================================
 // world.js — 3D House & World
-// Builds all geometry for the house
+// Layout based on real floor plan:
+// Single-wide style mobile home
 // ================================
 
 const World = (() => {
 
-  // Wall height and thickness
-  const WALL_H = 3.2;
-  const WALL_T = 0.18;
+  const WALL_H = 2.8;   // wall height
+  const WALL_T = 0.15;  // wall thickness
+  const FLOOR_Y = 0.02; // slightly above grass to prevent z-fighting
 
-  // Colors
+  // Door opening dimensions
+  const DOOR_W = 0.9;
+  const DOOR_H = 2.1;
+
   const COLORS = {
-    floor_living:  0xd4a96a,
-    floor_kitchen: 0xe8d5a3,
-    floor_bedroom: 0xc8b4e8,
-    floor_garage:  0xb0b0b0,
-    floor_hall:    0xddd0b0,
-    floor_outside: 0x888870,  // driveway
-    floor_grass:   0x5a8a3c,
-    wall:          0xf5efe0,
-    wall_kitchen:  0xfff8e7,
-    wall_bedroom:  0xe8e0f5,
-    ceiling:       0xfaf7f0,
-    trim:          0xd4b896,
-    door_frame:    0x8b6940,
-    door:          0x6b4f2a,
-    baseboard:     0xe8dcc8,
+    // Floors
+    fl_living:   0xd4b896,
+    fl_kitchen:  0xe8d5a3,
+    fl_bed1:     0xc8d4b8,  // master bedroom - warm green
+    fl_bed2:     0xc8c4d8,  // bedroom 2 - soft purple
+    fl_bed3:     0xd8c4b8,  // bedroom 3 - warm tan
+    fl_bath:     0xe0e8ec,  // bathroom - cool tile
+    fl_utility:  0xb8b8b8,  // utility - gray
+    fl_outside:  0x909080,  // driveway concrete
+    fl_grass:    0x5a8a3c,
+    // Walls
+    wall:        0xf5efe0,
+    wall_bath:   0xe8f0f5,
+    wall_kitchen:0xfff8ee,
+    ceiling:     0xfafaf5,
+    baseboard:   0xe8dcc8,
   };
 
-  // Room layout (in world units)
-  // Each room: { x, z, w, d, name, floorColor, wallColor }
+  // -----------------------------------------------
+  // ROOM DEFINITIONS
+  // Matching the floor plan layout:
+  // Bottom row (south): Bed2, Living, Master Bed
+  // Top row (north):    Bed3+Bath, Kitchen, Utility+MBath
+  //
+  // World units: 1 unit ≈ 1 foot / 3
+  // Living room is ~20ft wide x 13ft deep = ~6.6 x 4.3 units
+  // We'll use a scale where 3 units = ~9ft room width
+  // -----------------------------------------------
+
+  // All room centers and sizes in world units
   const ROOMS = [
-    { id: 'living',  name: 'Living Room',  x:  0,    z:  0,    w: 7,   d: 6,   floorColor: COLORS.floor_living,  wallColor: COLORS.wall         },
-    { id: 'kitchen', name: 'Kitchen',      x:  7.5,  z:  0,    w: 5,   d: 5,   floorColor: COLORS.floor_kitchen, wallColor: COLORS.wall_kitchen  },
-    { id: 'bedroom', name: 'Bedroom',      x: -7.5,  z:  0,    w: 5.5, d: 6,   floorColor: COLORS.floor_bedroom, wallColor: COLORS.wall_bedroom  },
-    { id: 'hall',    name: 'Hallway',      x:  0,    z: -5.5,  w: 3,   d: 5,   floorColor: COLORS.floor_hall,    wallColor: COLORS.wall         },
-    { id: 'garage',  name: 'Garage',       x:  0,    z:  6,    w: 6,   d: 4,   floorColor: COLORS.floor_garage,  wallColor: COLORS.wall         },
+    // --- SOUTH ROW ---
+    { id: 'living',   name: 'Living Room',   x:  0,    z:  4.5,  w: 7.0, d: 4.5, floor: COLORS.fl_living,   wall: COLORS.wall         },
+    { id: 'bed2',     name: 'Bedroom 2',     x: -5.5,  z:  4.5,  w: 3.5, d: 4.5, floor: COLORS.fl_bed2,    wall: COLORS.wall         },
+    { id: 'master',   name: 'Master Bedroom',x:  5.5,  z:  4.5,  w: 4.5, d: 4.5, floor: COLORS.fl_bed1,    wall: COLORS.wall         },
+    // --- NORTH ROW ---
+    { id: 'kitchen',  name: 'Eat-in Kitchen',x:  0,    z: -1.0,  w: 7.0, d: 3.5, floor: COLORS.fl_kitchen,  wall: COLORS.wall_kitchen },
+    { id: 'bed3',     name: 'Bedroom 3',     x: -5.5,  z: -1.5,  w: 3.5, d: 2.5, floor: COLORS.fl_bed3,    wall: COLORS.wall         },
+    { id: 'bath2',    name: 'Bath 2',        x: -5.5,  z: -4.5,  w: 3.5, d: 2.0, floor: COLORS.fl_bath,    wall: COLORS.wall_bath    },
+    { id: 'utility',  name: 'Utility',       x:  4.5,  z: -2.0,  w: 2.5, d: 1.5, floor: COLORS.fl_utility,  wall: COLORS.wall         },
+    { id: 'mbath',    name: 'Master Bath',   x:  6.5,  z: -2.5,  w: 2.5, d: 2.5, floor: COLORS.fl_bath,    wall: COLORS.wall_bath    },
   ];
 
-  // Doorways: connects rooms [roomA, roomB, world position of opening center]
+  // -----------------------------------------------
+  // DOORWAYS
+  // Each doorway cuts a gap between two rooms
+  // pos: center of gap in world space
+  // dir: 'x' = gap in east/west wall, 'z' = gap in north/south wall
+  // -----------------------------------------------
   const DOORWAYS = [
-    { a: 'living',  b: 'kitchen', x:  3.75, z:  0,    axis: 'z' },  // living-kitchen E wall
-    { a: 'living',  b: 'bedroom', x: -3.75, z:  0,    axis: 'z' },  // living-bedroom W wall
-    { a: 'living',  b: 'hall',    x:  0,    z: -2.75, axis: 'x' },  // living-hall S wall
-    { a: 'hall',    b: 'outside', x:  0,    z: -8,    axis: 'x' },  // front door
-    { a: 'living',  b: 'garage',  x:  0,    z:  3.25, axis: 'x' },  // living-garage N wall
+    // Living <-> Kitchen (north wall of living, south wall of kitchen)
+    { a: 'living',  b: 'kitchen', x:  0,    z:  2.25,  dir: 'x' },
+    // Living <-> Bed2
+    { a: 'living',  b: 'bed2',    x: -3.75, z:  4.5,   dir: 'z' },
+    // Living <-> Master
+    { a: 'living',  b: 'master',  x:  3.25, z:  4.5,   dir: 'z' },
+    // Kitchen <-> Bed3
+    { a: 'kitchen', b: 'bed3',    x: -3.75, z: -0.25,  dir: 'z' },
+    // Bed3 <-> Bath2
+    { a: 'bed3',    b: 'bath2',   x: -5.5,  z: -3.25,  dir: 'x' },
+    // Kitchen <-> Utility
+    { a: 'kitchen', b: 'utility', x:  3.25, z: -0.75,  dir: 'z' },
+    // Master <-> MBath
+    { a: 'master',  b: 'mbath',   x:  5.5,  z:  2.25,  dir: 'x' },
+    // Front door: Living south wall to outside
+    { a: 'living',  b: 'outside', x:  0,    z:  6.75,  dir: 'x' },
   ];
 
   let scene;
 
   // ----------------------------------------
-  // build(scene) — main entry point
+  // build(scene)
   // ----------------------------------------
   function build(sceneRef) {
     scene = sceneRef;
-
-    // Sky / ambient
     scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.Fog(0x87ceeb, 20, 60);
+    scene.fog = new THREE.Fog(0x87ceeb, 25, 70);
 
     buildOutdoor();
-    ROOMS.forEach(room => buildRoom(room));
+    ROOMS.forEach(r => buildRoom(r));
+    buildAllWalls();
     buildFurniture();
   }
 
   // ----------------------------------------
-  // buildRoom(room)
+  // buildRoom — floor + ceiling only
+  // Walls are handled by buildAllWalls with doorway gaps
   // ----------------------------------------
   function buildRoom(room) {
-    const { x, z, w, d, floorColor, wallColor } = room;
+    const { x, z, w, d, floor, wall } = room;
 
-    // Floor — raised to 0.02 to sit cleanly above the grass (prevents z-fighting)
-    const floor = makePlane(w, d, floorColor);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(x, 0.02, z);
-    floor.receiveShadow = true;
-    floor.userData.roomId = room.id;
-    scene.add(floor);
+    // Floor
+    const floorMesh = makePlane(w, d, floor);
+    floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.position.set(x, FLOOR_Y, z);
+    floorMesh.receiveShadow = true;
+    scene.add(floorMesh);
 
     // Ceiling
-    const ceil = makePlane(w, d, COLORS.ceiling);
-    ceil.rotation.x = Math.PI / 2;
-    ceil.position.set(x, WALL_H, z);
-    scene.add(ceil);
-
-    // Walls: N, S, E, W
-    // North wall (positive Z face)
-    addWall(x, z + d/2, w, WALL_H, wallColor, 0,        room.id, 'N');
-    // South wall
-    addWall(x, z - d/2, w, WALL_H, wallColor, 0,        room.id, 'S');
-    // East wall
-    addWall(x + w/2, z, d, WALL_H, wallColor, Math.PI/2, room.id, 'E');
-    // West wall
-    addWall(x - w/2, z, d, WALL_H, wallColor, Math.PI/2, room.id, 'W');
-
-    // Baseboards
-    addBaseboard(x, z + d/2, w, 0);
-    addBaseboard(x, z - d/2, w, 0);
-    addBaseboard(x + w/2, z, d, Math.PI/2);
-    addBaseboard(x - w/2, z, d, Math.PI/2);
+    const ceilMesh = makePlane(w, d, COLORS.ceiling);
+    ceilMesh.rotation.x = Math.PI / 2;
+    ceilMesh.position.set(x, WALL_H, z);
+    scene.add(ceilMesh);
   }
 
   // ----------------------------------------
-  // addWall — creates a wall segment
+  // buildAllWalls — builds every wall segment
+  // checking doorway list for gaps
   // ----------------------------------------
-  function addWall(wx, wz, width, height, color, rotY, roomId, side) {
-    const geo = new THREE.BoxGeometry(width, height, WALL_T);
-    const mat = new THREE.MeshLambertMaterial({ color });
+  function buildAllWalls() {
+    ROOMS.forEach(room => {
+      const { id, x, z, w, d, wall } = room;
+
+      // North wall (z - d/2), South wall (z + d/2)
+      // East wall  (x + w/2), West wall  (x - w/2)
+
+      const northZ = z - d / 2;
+      const southZ = z + d / 2;
+      const eastX  = x + w / 2;
+      const westX  = x - w / 2;
+
+      // Find any doorways that cut this wall
+      // North wall: doorway dir='x', doorway.z ≈ northZ, doorway.x within room x range
+      buildWallWithGaps(x, northZ, w, 'horizontal', wall, room, 'N');
+      buildWallWithGaps(x, southZ, w, 'horizontal', wall, room, 'S');
+      buildWallWithGaps(eastX, z,  d, 'vertical',   wall, room, 'E');
+      buildWallWithGaps(westX, z,  d, 'vertical',   wall, room, 'W');
+    });
+  }
+
+  // ----------------------------------------
+  // buildWallWithGaps
+  // wallX/wallZ: center of wall
+  // length: wall length
+  // orientation: 'horizontal' (runs along X) or 'vertical' (runs along Z)
+  // side: N/S/E/W
+  // ----------------------------------------
+  function buildWallWithGaps(wallX, wallZ, length, orientation, color, room, side) {
+    // Find doorways that cut this wall
+    const gaps = [];
+
+    DOORWAYS.forEach(door => {
+      if (door.a !== room.id && door.b !== room.id) return;
+
+      const isHoriz = orientation === 'horizontal';
+
+      if (isHoriz) {
+        // Wall runs along X axis at wallZ
+        // Door cuts it if door.z ≈ wallZ and door.x is within wall span
+        if (Math.abs(door.z - wallZ) < 0.6 &&
+            door.x >= wallX - length / 2 - 0.1 &&
+            door.x <= wallX + length / 2 + 0.1) {
+          gaps.push(door.x); // gap center on X axis
+        }
+      } else {
+        // Wall runs along Z axis at wallX
+        if (Math.abs(door.x - wallX) < 0.6 &&
+            door.z >= wallZ - length / 2 - 0.1 &&
+            door.z <= wallZ + length / 2 + 0.1) {
+          gaps.push(door.z); // gap center on Z axis
+        }
+      }
+    });
+
+    const isHoriz = orientation === 'horizontal';
+    const rotY    = isHoriz ? 0 : Math.PI / 2;
+
+    if (!gaps.length) {
+      // Solid wall, no doorway
+      addWallSegment(wallX, wallZ, length, color, rotY);
+      return;
+    }
+
+    // Sort gaps
+    gaps.sort((a, b) => a - b);
+
+    // Build wall segments around each gap
+    const start = isHoriz ? wallX - length / 2 : wallZ - length / 2;
+    let cursor = start;
+
+    gaps.forEach(gapCenter => {
+      const gapStart = gapCenter - DOOR_W / 2;
+      const gapEnd   = gapCenter + DOOR_W / 2;
+
+      // Segment before gap
+      const segLen = gapStart - cursor;
+      if (segLen > 0.05) {
+        const segCenter = cursor + segLen / 2;
+        if (isHoriz) addWallSegment(segCenter, wallZ, segLen, color, rotY);
+        else         addWallSegment(wallX, segCenter, segLen, color, rotY);
+      }
+
+      // Door frame: wall above doorway
+      const aboveH  = WALL_H - DOOR_H;
+      const aboveCY = DOOR_H + aboveH / 2;
+      if (aboveH > 0.05) {
+        const geo = new THREE.BoxGeometry(DOOR_W, aboveH, WALL_T);
+        const mat = new THREE.MeshLambertMaterial({ color });
+        const mesh = new THREE.Mesh(geo, mat);
+        if (isHoriz) mesh.position.set(gapCenter, aboveCY, wallZ);
+        else         mesh.position.set(wallX, aboveCY, gapCenter);
+        mesh.rotation.y = rotY;
+        mesh.castShadow = true;
+        scene.add(mesh);
+      }
+
+      cursor = gapEnd;
+    });
+
+    // Final segment after last gap
+    const end    = isHoriz ? wallX + length / 2 : wallZ + length / 2;
+    const segLen = end - cursor;
+    if (segLen > 0.05) {
+      const segCenter = cursor + segLen / 2;
+      if (isHoriz) addWallSegment(segCenter, wallZ, segLen, color, rotY);
+      else         addWallSegment(wallX, segCenter, segLen, color, rotY);
+    }
+  }
+
+  // ----------------------------------------
+  // addWallSegment
+  // ----------------------------------------
+  function addWallSegment(wx, wz, length, color, rotY) {
+    const geo  = new THREE.BoxGeometry(length, WALL_H, WALL_T);
+    const mat  = new THREE.MeshLambertMaterial({ color });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(wx, height / 2, wz);
+    mesh.position.set(wx, WALL_H / 2, wz);
     mesh.rotation.y = rotY;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.isWall = true;
-    mesh.userData.roomId = roomId;
-    mesh.userData.side = side;
-    scene.add(mesh);
-    return mesh;
-  }
-
-  // ----------------------------------------
-  // addBaseboard
-  // ----------------------------------------
-  function addBaseboard(wx, wz, width, rotY) {
-    const geo = new THREE.BoxGeometry(width, 0.12, 0.06);
-    const mat = new THREE.MeshLambertMaterial({ color: COLORS.baseboard });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(wx, 0.06, wz);
-    mesh.rotation.y = rotY;
     scene.add(mesh);
   }
 
   // ----------------------------------------
-  // buildOutdoor — driveway + grass + sky
+  // buildOutdoor
   // ----------------------------------------
   function buildOutdoor() {
-    // Grass field — slightly below y=0 so room floors don't z-fight
-    const grass = makePlane(80, 80, COLORS.floor_grass);
+    // Grass
+    const grass = makePlane(100, 100, COLORS.fl_grass);
     grass.rotation.x = -Math.PI / 2;
     grass.position.set(0, -0.05, 0);
     grass.receiveShadow = true;
     scene.add(grass);
 
-    // Driveway — also below room floor level
-    const driveway = makePlane(10, 20, COLORS.floor_outside);
-    driveway.rotation.x = -Math.PI / 2;
-    driveway.position.set(0, -0.04, -18);
-    driveway.receiveShadow = true;
-    scene.add(driveway);
-
-    // House exterior base (so outside looks like a house)
-    addExteriorWalls();
+    // Driveway (south of house, in front of front door)
+    const drive = makePlane(8, 12, COLORS.fl_outside);
+    drive.rotation.x = -Math.PI / 2;
+    drive.position.set(0, -0.03, 12);
+    drive.receiveShadow = true;
+    scene.add(drive);
   }
 
   // ----------------------------------------
-  // addExteriorWalls — rough house exterior
-  // ----------------------------------------
-  function addExteriorWalls() {
-    const extColor = 0xe8d5b8;
-    const roofColor = 0x8b4513;
-
-    // Simple box to represent house exterior
-    const geo = new THREE.BoxGeometry(20, WALL_H + 0.5, 18);
-    const mat = new THREE.MeshLambertMaterial({ color: extColor, side: THREE.BackSide });
-    const ext = new THREE.Mesh(geo, mat);
-    ext.position.set(0, (WALL_H + 0.5) / 2, 1.5);
-    scene.add(ext);
-
-    // Roof ridge
-    const roofGeo = new THREE.CylinderGeometry(0.2, 0.2, 21, 6);
-    const roofMat = new THREE.MeshLambertMaterial({ color: roofColor });
-    const ridge = new THREE.Mesh(roofGeo, roofMat);
-    ridge.rotation.z = Math.PI / 2;
-    ridge.position.set(0, WALL_H + 2.5, 1.5);
-    scene.add(ridge);
-  }
-
-  // ----------------------------------------
-  // buildFurniture — basic cartoony furniture
+  // buildFurniture
   // ----------------------------------------
   function buildFurniture() {
-    // Living Room
-    // Sofa: north wall is at z = +3, sofa back should touch it
-    addSofa(0, 2.1);           // z=2.1 so back piece sits against z=3 wall
-    addCoffeeTable(0, 0.5);    // coffee table in front of sofa
-    addTV(0, -2.5);            // TV on south wall, centered
+    // Living Room — sofa faces north toward kitchen, TV on south wall
+    addSofa(0, 5.8);          // sofa near south wall, back against it, faces north
+    addCoffeeTable(0, 4.8);
+    addTV(0, 2.8);            // TV on north side facing south
 
-    // Kitchen
-    addCounterL(7.5, 0, 2);
-    addRefrigerator(9.5, 0, 1.5);
+    // Kitchen — counter along north wall, fridge in corner
+    addCounter(-1.5, -2.5, 4.0);   // counter along north wall
+    addRefrigerator(2.5, -2.5);
 
-    // Bedroom
-    addBed(-7.5, 0, 1.5);
-    addDresser(-9.5, 0, -1);
+    // Master Bedroom
+    addBed(5.5, 5.5);
+    addDresser(7.2, 3.5);
+
+    // Bedroom 2
+    addBed(-5.5, 5.5);
+
+    // Bedroom 3
+    addBed(-5.5, -1.0);
   }
 
   // --- Furniture helpers ---
 
-  function addBox(x, y, z, w, h, d, color, shadow = true) {
-    const geo = new THREE.BoxGeometry(w, h, d);
-    const mat = new THREE.MeshLambertMaterial({ color });
+  function addBox(x, y, z, w, h, d, color) {
+    const geo  = new THREE.BoxGeometry(w, h, d);
+    const mat  = new THREE.MeshLambertMaterial({ color });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, y + h/2, z);
-    if (shadow) { mesh.castShadow = true; mesh.receiveShadow = true; }
+    mesh.position.set(x, y + h / 2, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
     return mesh;
   }
 
   function addSofa(x, z) {
-    // Back of sofa at z+0.35, facing south (negative Z direction)
-    addBox(x, 0,    z,        2.4, 0.55, 0.9,  0x6b8cba); // seat base
-    addBox(x, 0.55, z + 0.35, 2.4, 0.65, 0.2,  0x5a7aaa); // back rest (against wall)
-    addBox(x - 1.1, 0.55, z,  0.2, 0.3,  0.9,  0x5a7aaa); // left arm
-    addBox(x + 1.1, 0.55, z,  0.2, 0.3,  0.9,  0x5a7aaa); // right arm
-    // cushions face outward (toward negative Z)
-    [-0.7, 0, 0.7].forEach(ox => addBox(x + ox, 0.55, z - 0.1, 0.7, 0.18, 0.75, 0x7a9cca));
+    addBox(x,       0,    z,        2.4, 0.52, 0.85, 0x6b8cba); // seat
+    addBox(x,       0.52, z + 0.37, 2.4, 0.60, 0.18, 0x5a7aaa); // back (against south wall)
+    addBox(x - 1.1, 0.52, z,        0.18, 0.28, 0.85, 0x5a7aaa); // arm L
+    addBox(x + 1.1, 0.52, z,        0.18, 0.28, 0.85, 0x5a7aaa); // arm R
+    [-0.7, 0, 0.7].forEach(ox =>
+      addBox(x + ox, 0.52, z - 0.08, 0.68, 0.16, 0.72, 0x7a9cca) // cushions
+    );
   }
 
-  function addCoffeeTable(x, y, z) {
-    addBox(x, 0, z, 1.2, 0.42, 0.6, 0x8b6940);
-    // legs
-    [[-0.5,-0.25],[-0.5,0.25],[0.5,-0.25],[0.5,0.25]].forEach(([ox,oz]) => {
-      addBox(x+ox, 0, z+oz, 0.08, 0.38, 0.08, 0x6b4f2a);
-    });
+  function addCoffeeTable(x, z) {
+    addBox(x, 0, z, 1.1, 0.40, 0.55, 0x8b6940);
+    [[-0.45,-0.22],[-0.45,0.22],[0.45,-0.22],[0.45,0.22]].forEach(([ox,oz]) =>
+      addBox(x+ox, 0, z+oz, 0.07, 0.36, 0.07, 0x6b4f2a)
+    );
   }
 
   function addTV(x, z) {
-    // TV stand on floor
-    addBox(x, 0,    z,        1.4, 0.5,  0.4,  0x333333); // cabinet base
-    addBox(x, 0.5,  z + 0.05, 1.3, 0.06, 0.35, 0x222222); // shelf top
-    // Screen sitting on stand
-    addBox(x, 0.5,  z + 0.1,  1.2, 0.7,  0.08, 0x111111); // TV body
-    addBox(x, 0.5,  z + 0.15, 1.1, 0.62, 0.02, 0x1a2a3a); // screen face
+    addBox(x, 0,    z,        1.3, 0.48, 0.38, 0x2a2a2a); // cabinet
+    addBox(x, 0.48, z + 0.08, 1.2, 0.68, 0.08, 0x111111); // screen body
+    addBox(x, 0.48, z + 0.13, 1.1, 0.60, 0.02, 0x1a2a3a); // screen face
   }
 
-  function addCounterL(x, y, z) {
-    addBox(x, 0, z, 3, 0.9, 0.6, 0xd4c4a0);   // counter top
-    addBox(x, 0, z, 3, 0.85, 0.55, 0xc0b090);  // cabinet body
+  function addCounter(x, z, length) {
+    addBox(x, 0,    z, length, 0.88, 0.55, 0xd4c4a0); // cabinet
+    addBox(x, 0.88, z, length + 0.04, 0.05, 0.60, 0xc8b890); // countertop overhang
   }
 
-  function addRefrigerator(x, y, z) {
-    addBox(x, 0, z, 0.8, 1.8, 0.75, 0xe0e0e0);
-    addBox(x, 0, z, 0.78, 1.78, 0.73, 0xd8d8d8);
-    // handle
-    addBox(x + 0.3, 1.2, z - 0.38, 0.06, 0.5, 0.06, 0xaaaaaa);
+  function addRefrigerator(x, z) {
+    addBox(x, 0, z, 0.75, 1.75, 0.72, 0xdedede);
+    addBox(x + 0.28, 1.1, z - 0.37, 0.05, 0.45, 0.05, 0xaaaaaa); // handle
   }
 
-  function addBed(x, y, z) {
-    addBox(x, 0, z, 2, 0.3, 2.8, 0x8b6940);  // frame
-    addBox(x, 0.3, z, 1.9, 0.35, 2.6, 0xfaf0e6); // mattress
-    addBox(x, 0.65, z - 1.2, 1.9, 0.15, 2.4, 0xe8e0f0); // blanket
-    addBox(x, 0.65, z - 1.2, 2, 0.55, 0.22, 0x8b6940); // headboard
-    // pillows
-    [-0.45, 0.45].forEach(ox => addBox(x+ox, 0.7, z+1.1, 0.75, 0.18, 0.5, 0xffffff));
+  function addBed(x, z) {
+    addBox(x, 0,    z,       1.9, 0.28, 2.6,  0x8b6940); // frame
+    addBox(x, 0.28, z,       1.8, 0.32, 2.4,  0xfaf0e6); // mattress
+    addBox(x, 0.60, z - 1.1, 1.8, 0.14, 2.2,  0xe0d8f0); // blanket
+    addBox(x, 0.60, z - 1.15,1.9, 0.52, 0.20, 0x7a5c30); // headboard
+    [-0.43, 0.43].forEach(ox =>
+      addBox(x + ox, 0.62, z + 1.0, 0.72, 0.16, 0.48, 0xffffff) // pillows
+    );
   }
 
-  function addDresser(x, y, z) {
-    addBox(x, 0, z, 0.6, 1.1, 1.0, 0x8b7355);
-    // drawer lines
-    [0.2, 0.55, 0.9].forEach(h => addBox(x - 0.3, h, z, 0.02, 0.04, 0.85, 0x6b5535));
-    // knobs
-    [0.2, 0.55, 0.9].forEach(h => addBox(x - 0.32, h, z, 0.04, 0.04, 0.06, 0xc0a060));
+  function addDresser(x, z) {
+    addBox(x, 0, z, 0.55, 1.05, 0.95, 0x8b7355);
+    [0.18, 0.52, 0.86].forEach(h =>
+      addBox(x - 0.28, h, z, 0.02, 0.04, 0.82, 0x6b5535)
+    );
   }
 
   // ----------------------------------------
@@ -268,15 +360,15 @@ const World = (() => {
   // ----------------------------------------
   function makePlane(w, d, color) {
     const geo = new THREE.PlaneGeometry(w, d);
-    const mat = new THREE.MeshLambertMaterial({ color });
+    const mat = new THREE.MeshLambertMaterial({ color, side: THREE.FrontSide });
     return new THREE.Mesh(geo, mat);
   }
 
   // ----------------------------------------
-  // getSpawnPoint() — where player starts
+  // getSpawnPoint — start in living room
   // ----------------------------------------
   function getSpawnPoint() {
-    return new THREE.Vector3(0, 1.7, 0); // center of living room, eye height
+    return new THREE.Vector3(0, 1.7, 4.5);
   }
 
   return { build, getSpawnPoint, ROOMS, DOORWAYS };

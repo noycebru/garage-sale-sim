@@ -49,20 +49,21 @@ const Objects = (() => {
   function spawnInitialItems() {
     // Predefined spawn points [x, z, roomId]
     const spawnPoints = [
-      // Living Room
-      [  1.5,  1.0, 'living'  ],
-      [ -1.0, -1.5, 'living'  ],
-      [  2.5, -0.5, 'living'  ],
-      // Kitchen
-      [  7.5,  1.5, 'kitchen' ],
-      [  8.5, -1.0, 'kitchen' ],
-      // Bedroom
-      [ -7.5,  1.0, 'bedroom' ],
-      [ -8.5, -1.5, 'bedroom' ],
-      [ -6.5,  2.0, 'bedroom' ],
-      // Garage
-      [  1.0,  6.5, 'garage'  ],
-      [ -1.5,  7.0, 'garage'  ],
+      // Living Room (center ~0, 4.5)
+      [  1.5,  3.5, 'living'  ],
+      [ -1.5,  4.0, 'living'  ],
+      [  2.0,  5.5, 'living'  ],
+      // Kitchen (center ~0, -1.0)
+      [  1.0, -1.5, 'kitchen' ],
+      [ -2.0, -0.5, 'kitchen' ],
+      // Master Bedroom (center ~5.5, 4.5)
+      [  5.5,  3.5, 'bedroom' ],
+      [  6.5,  5.5, 'bedroom' ],
+      // Bedroom 2 (center ~-5.5, 4.5)
+      [ -5.5,  3.5, 'bedroom' ],
+      [ -6.0,  5.5, 'bedroom' ],
+      // Bedroom 3 (center ~-5.5, -1.5)
+      [ -5.5, -1.0, 'bedroom' ],
     ];
 
     spawnPoints.forEach(([x, z, roomId]) => {
