@@ -177,39 +177,47 @@ const Player = (() => {
   // update(delta) — called every frame
   // ----------------------------------------
   function update(delta) {
-    // Build movement vector from keys or joystick
-    let mx = 0, mz = 0;
+    // Input: forward/back and strafe left/right
+    let fwd    = 0;  // positive = forward
+    let strafe = 0;  // positive = right
 
-    if (keys.w) mz -= 1;
-    if (keys.s) mz += 1;
-    if (keys.a) mx -= 1;
-    if (keys.d) mx += 1;
+    if (keys.w) fwd    += 1;
+    if (keys.s) fwd    -= 1;
+    if (keys.d) strafe += 1;
+    if (keys.a) strafe -= 1;
 
-    // Joystick overrides if active
-    // moveDir.x = horizontal stick = strafe, moveDir.y = vertical stick = forward/back
+    // Joystick: up = forward, right = strafe right
     if (joystickActive) {
-      mx =  moveDir.x;
-      mz = -moveDir.y;  // invert Y: push stick up (negative screen Y) = move forward (negative world Z)
+      fwd    = -moveDir.y;  // stick up = negative screen Y = forward
+      strafe =  moveDir.x;  // stick right = positive screen X = strafe right
     }
 
-    // Normalize diagonal
-    const len = Math.sqrt(mx*mx + mz*mz);
-    if (len > 1) { mx /= len; mz /= len; }
+    // Get camera's forward and right vectors (flat on XZ plane, ignore pitch)
+    const forward = new THREE.Vector3(
+      -Math.sin(yaw),
+       0,
+      -Math.cos(yaw)
+    );
+    const right = new THREE.Vector3(
+       Math.cos(yaw),
+       0,
+      -Math.sin(yaw)
+    );
 
-    // Apply yaw rotation to movement direction
-    const cos = Math.cos(yaw);
-    const sin = Math.sin(yaw);
-    const worldX = mx * cos - mz * sin;
-    const worldZ = mx * sin + mz * cos;
+    // Combine and normalize
+    const moveVec = new THREE.Vector3();
+    moveVec.addScaledVector(forward, fwd);
+    moveVec.addScaledVector(right, strafe);
+    if (moveVec.length() > 1) moveVec.normalize();
 
-    // Move camera (keep Y fixed)
-    const nextX = camera.position.x + worldX * SPEED * delta;
-    const nextZ = camera.position.z + worldZ * SPEED * delta;
+    // Apply speed
+    camera.position.x += moveVec.x * SPEED * delta;
+    camera.position.z += moveVec.z * SPEED * delta;
 
-    // Simple boundary: keep inside house bounds + driveway
+    // Clamp to world bounds
     const BOUND = 18;
-    camera.position.x = Math.max(-BOUND, Math.min(BOUND, nextX));
-    camera.position.z = Math.max(-22, Math.min(BOUND, nextZ));
+    camera.position.x = Math.max(-BOUND, Math.min(BOUND, camera.position.x));
+    camera.position.z = Math.max(-22,    Math.min(BOUND, camera.position.z));
     camera.position.y = EYE_HEIGHT;
 
     // Apply look rotation

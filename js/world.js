@@ -70,10 +70,10 @@ const World = (() => {
   function buildRoom(room) {
     const { x, z, w, d, floorColor, wallColor } = room;
 
-    // Floor
+    // Floor — raised to 0.02 to sit cleanly above the grass (prevents z-fighting)
     const floor = makePlane(w, d, floorColor);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(x, 0, z);
+    floor.position.set(x, 0.02, z);
     floor.receiveShadow = true;
     floor.userData.roomId = room.id;
     scene.add(floor);
