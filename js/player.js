@@ -210,14 +210,25 @@ const Player = (() => {
     moveVec.addScaledVector(right, strafe);
     if (moveVec.length() > 1) moveVec.normalize();
 
-    // Apply speed
-    camera.position.x += moveVec.x * SPEED * delta;
-    camera.position.z += moveVec.z * SPEED * delta;
+    // Try X and Z separately so player slides along walls
+    const RADIUS = 0.35;
+    const curX = camera.position.x;
+    const curZ = camera.position.z;
+    const newX = curX + moveVec.x * SPEED * delta;
+    const newZ = curZ + moveVec.z * SPEED * delta;
 
-    // Clamp to world bounds
-    const BOUND = 18;
-    camera.position.x = Math.max(-BOUND, Math.min(BOUND, camera.position.x));
-    camera.position.z = Math.max(-22,    Math.min(BOUND, camera.position.z));
+    // X axis
+    if (!World.checkCollision(newX, curZ, RADIUS)) {
+      camera.position.x = newX;
+    }
+    // Z axis
+    if (!World.checkCollision(camera.position.x, newZ, RADIUS)) {
+      camera.position.z = newZ;
+    }
+
+    // Keep inside overall world bounds
+    camera.position.x = Math.max(-12, Math.min(12, camera.position.x));
+    camera.position.z = Math.max(-5,  Math.min(21, camera.position.z));
     camera.position.y = EYE_HEIGHT;
 
     // Apply look rotation
