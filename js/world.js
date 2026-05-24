@@ -429,50 +429,74 @@ const World = (() => {
   }
 
   // ----------------------------------------
-  // DOORS — actual door panels in openings
+  // DOORS — closed by default, with frames
   // ----------------------------------------
   function buildDoors() {
-    // Front door (south wall, x=0, z=SOUTH)
+    // Front door — open so player can walk out
     addDoor(0, SOUTH, 'H', true);
 
-    // Interior doors
-    addDoor(-4,  2.5, 'V', false);   // bed2 <-> living
-    addDoor( 4,  2.5, 'V', false);   // living <-> master
-    addDoor(-6.5, MID_Z, 'H', false); // bed2 <-> bed3
-    addDoor( 0,  MID_Z, 'H', false);  // living <-> kitchen
-    addDoor( 7,  MID_Z, 'H', false);  // master <-> utility
-    addDoor(-3.5,-1.5, 'V', false);   // kitchen <-> bed3
-    addDoor( 3.5,-1.5, 'V', false);   // kitchen <-> utility
-    addDoor( 7,  -2,  'H', false);    // utility <-> mbath
+    // All interior doors — closed
+    addDoor(-4,   2.5,  'V', false);   // bed2 <-> living
+    addDoor( 4,   2.5,  'V', false);   // living <-> master
+    addDoor(-6.5, 0,    'H', false);   // bed2 <-> bed3 area
+    addDoor( 0,   0,    'H', false);   // living <-> kitchen
+    addDoor( 7,   0,    'H', false);   // master <-> utility
+    addDoor(-3.5,-1.5,  'V', false);   // kitchen <-> bed3
+    addDoor( 3.5,-1.5,  'V', false);   // kitchen <-> utility
+    addDoor( 7,  -2,    'H', false);   // utility <-> mbath
   }
 
   function addDoor(cx, cz, axis, isOpen) {
-    // Door panel
-    const w   = axis === 'H' ? DOOR_W - 0.05 : 0.06;
-    const d   = axis === 'H' ? 0.06 : DOOR_W - 0.05;
-    const geo = new THREE.BoxGeometry(w, DOOR_H - 0.05, d);
-    const mat = new THREE.MeshLambertMaterial({ color: C.door });
+    const panelW = DOOR_W - 0.06;
+    const panelH = DOOR_H - 0.05;
+
+    // Door panel geometry — thin slab
+    const geo = new THREE.BoxGeometry(
+      axis === 'H' ? panelW : 0.05,
+      panelH,
+      axis === 'H' ? 0.05  : panelW
+    );
+    const mat  = new THREE.MeshLambertMaterial({ color: C.door });
     const mesh = new THREE.Mesh(geo, mat);
 
     if (isOpen) {
-      // Front door: swing open (rotate 90deg, offset to side)
-      mesh.position.set(cx + DOOR_W / 2, DOOR_H / 2, cz - 0.06);
-      mesh.rotation.y = Math.PI / 2;
+      // Front door swung fully open to the side
+      if (axis === 'H') {
+        mesh.position.set(cx - panelW / 2, panelH / 2, cz + 0.03);
+        mesh.rotation.y = -Math.PI / 2;
+      } else {
+        mesh.position.set(cx + 0.03, panelH / 2, cz + panelW / 2);
+        mesh.rotation.y = 0;
+      }
     } else {
-      // Interior: slightly ajar
-      mesh.position.set(cx, DOOR_H / 2, cz);
-      mesh.rotation.y = axis === 'H' ? 0.3 : 0.3;
+      // Closed — flat in the wall
+      mesh.position.set(cx, panelH / 2, cz);
+      mesh.rotation.y = 0;
     }
+
     mesh.castShadow = true;
     scene.add(mesh);
 
-    // Door frame sides
-    const frameColor = C.door_frame;
-    const fW = axis === 'H' ? 0.08 : WALL_T + 0.02;
-    const fD = axis === 'H' ? WALL_T + 0.02 : 0.08;
-    [-DOOR_W/2, DOOR_W/2].forEach(offset => {
-      const fgeo = new THREE.BoxGeometry(fW, DOOR_H + 0.1, fD);
-      const fmat = new THREE.MeshLambertMaterial({ color: frameColor });
+    // Door knob
+    const knobGeo = new THREE.SphereGeometry(0.04, 6, 6);
+    const knobMat = new THREE.MeshLambertMaterial({ color: 0xd4a830 });
+    const knob    = new THREE.Mesh(knobGeo, knobMat);
+    knob.position.set(
+      axis === 'H' ? cx + panelW * 0.35 : cx + 0.06,
+      panelH * 0.45,
+      axis === 'H' ? cz + 0.06 : cz + panelW * 0.35
+    );
+    scene.add(knob);
+
+    // Frame sides (thin posts either side of opening)
+    const frameC = C.door_frame;
+    [-DOOR_W / 2, DOOR_W / 2].forEach(offset => {
+      const fgeo = new THREE.BoxGeometry(
+        axis === 'H' ? 0.07 : WALL_T + 0.04,
+        DOOR_H + 0.08,
+        axis === 'H' ? WALL_T + 0.04 : 0.07
+      );
+      const fmat = new THREE.MeshLambertMaterial({ color: frameC });
       const fm   = new THREE.Mesh(fgeo, fmat);
       fm.position.set(
         axis === 'H' ? cx + offset : cx,
@@ -574,27 +598,39 @@ const World = (() => {
   }
 
   // ----------------------------------------
-  // FURNITURE — positioned to NOT block doors
+  // FURNITURE
+  // Doorway positions to avoid:
+  //   living<->kitchen: x=0, z=0
+  //   living<->bed2:    x=-4, z=2.5
+  //   living<->master:  x=+4, z=2.5
+  //   front door:       x=0, z=+4
+  // Keep furniture at least 1.2 units from any door
   // ----------------------------------------
   function buildFurniture() {
-    // Living Room (x: -4 to +4, z: 0 to +4)
-    addSofa(0, 3.5);           // sofa against south wall
-    addCoffeeTable(0, 2.3);
-    addTV(0, 0.4);             // TV against north divider wall
+    // Living Room (x:-4 to +4, z:0 to +4)
+    // Sofa along south wall (z≈3.5), away from side doors at x=±4
+    addSofa(0, 3.3);            // centered, back to south wall
+    addCoffeeTable(0, 2.0);     // in front of sofa
+    addTV(0, 0.5);              // against north wall (z=0 side), centered
 
-    // Kitchen (x: -3.5 to +3.5, z: -4 to 0)
-    addCounter(0, -3.5, 6.0);       // counter along north wall
-    addRefrigerator(3.0, -3.2);     // fridge in NE corner
+    // Kitchen (x:-3.5 to +3.5, z:-4 to 0)
+    // Counter along north wall, fridge in NW corner
+    // Avoid door at x=0,z=0 and x=-3.5,z=-1.5 and x=3.5,z=-1.5
+    addCounter(-1.0, -3.4, 4.0);    // counter along north wall, shifted west
+    addRefrigerator(-3.0, -3.2);    // NW corner, away from doors
 
-    // Master Bedroom (x: +4 to +10, z: 0 to +4)
-    addBed(7.0, 3.0);
-    addDresser(9.2, 1.0);
+    // Master Bedroom (x:+4 to +10, z:0 to +4)
+    // Door at x=4, z=2.5 — keep furniture east of x=5.5
+    addBed(7.5, 2.5);               // centered in room
+    addDresser(9.0, 0.6);           // NE corner
 
-    // Bedroom 2 (x: -10 to -4, z: 0 to +4)
-    addBed(-7.0, 3.0);
+    // Bedroom 2 (x:-10 to -4, z:0 to +4)
+    // Door at x=-4, z=2.5 — keep furniture west of x=-5.5
+    addBed(-7.5, 2.5);
 
-    // Bedroom 3 (x: -10 to -3.5, z: -2 to 0)
-    addBed(-7.0, -1.2);
+    // Bedroom 3 (x:-10 to -3.5, z:-2 to 0)
+    // Door at x=-3.5, z=-1.5 — keep furniture west of x=-5
+    addBed(-7.0, -1.0);
   }
 
   // --- Furniture helpers ---
