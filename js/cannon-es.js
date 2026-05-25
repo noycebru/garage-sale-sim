@@ -1,3 +1,4 @@
+﻿var CANNON = {}; (function(exports){
 'use strict';
 
 Object.defineProperty(exports, '__esModule', { value: true });
@@ -13079,5 +13080,4 @@ exports.Vec3 = Vec3;
 exports.Vec3Pool = Vec3Pool;
 exports.WheelInfo = WheelInfo;
 exports.World = World;
-
-window.CANNON = exports;
+})(CANNON);

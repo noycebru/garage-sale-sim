@@ -3,7 +3,7 @@
 // Kenney GLB models via GLTFLoader
 // ================================
 
-const World = (() => {
+const GameWorld = (() => {
 
   const WALL_H = 2.8;
   const WALL_T = 0.2;

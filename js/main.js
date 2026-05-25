@@ -45,9 +45,9 @@ function init() {
 
   // Build 3D world + register physics bodies
   try {
-    World.build(scene, physicsWorld);
+    GameWorld.build(scene, physicsWorld);
   } catch (e) {
-    console.error('[Main] World.build() threw — house may be incomplete:', e);
+    console.error('[Main] GameWorld.build() threw — house may be incomplete:', e);
   }
 
   // Player physics body — capsule approximated as sphere
@@ -59,7 +59,7 @@ function init() {
     linearDamping:  0.99,       // stop quickly when no input
     angularDamping: 1.0,
   });
-  const spawn = World.getSpawnPoint();
+  const spawn = GameWorld.getSpawnPoint();
   playerBody.position.set(spawn.x, 0.4, spawn.z);
   physicsWorld.addBody(playerBody);
 
