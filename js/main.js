@@ -34,10 +34,9 @@ function init() {
   clock  = new THREE.Clock();
 
   // Physics world
-  physicsWorld = new CANNON.World({
-    gravity: new CANNON.Vec3(0, -20, 0),
-  });
-  physicsWorld.broadphase = new CANNON.SAPBroadphase(physicsWorld);
+  physicsWorld = new CANNON.World();
+  physicsWorld.gravity.set(0, -20, 0);
+  physicsWorld.broadphase = new CANNON.NaiveBroadphase();
   physicsWorld.allowSleep = true;
 
   // Lighting
