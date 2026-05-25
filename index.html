@@ -71,30 +71,13 @@
   </div>
 
   <script src="js/three.min.js"></script>
-  <script type="module">
-    // Load cannon-es as ES module and expose as global CANNON
-    import * as CANNON from './js/cannon-es.js';
-    window.CANNON = CANNON;
-
-    // Now load all game scripts after CANNON is available
-    const scripts = [
-      'js/GLTFLoader.js',
-      'js/items.js',
-      'js/world.js',
-      'js/player.js',
-      'js/objects.js',
-      'js/ui.js',
-      'js/main.js',
-    ];
-    for (const src of scripts) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.body.appendChild(s);
-      });
-    }
-  </script>
+  <script src="js/GLTFLoader.js"></script>
+  <script src="js/cannon-es.js"></script>
+  <script src="js/items.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/objects.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
