@@ -71,20 +71,28 @@ function init() {
 
   window.addEventListener('resize', onResize);
 
-  // Loading bar then start screen
-  animateLoadingBar(() => {
-    document.getElementById('loading-screen').classList.add('fade-out');
-    setTimeout(() => {
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('start-screen').classList.remove('hidden');
-    }, 500);
-  });
+ // Loading bar then start screen
+animateLoadingBar(() => {
+  document.getElementById('loading-screen').classList.add('fade-out');
+  setTimeout(() => {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('start-screen').classList.remove('hidden');
+  }, 500);
+});
 
-  document.getElementById('start-btn').addEventListener('click', startGame);
+// Safety fallback — dismiss loading screen after 6 seconds no matter what
+setTimeout(() => {
+  const ls = document.getElementById('loading-screen');
+  const ss = document.getElementById('start-screen');
+  if (ls.style.display !== 'none') {
+    ls.style.display = 'none';
+    ss.classList.remove('hidden');
+  }
+}, 6000);
 
-  requestAnimationFrame(loop);
+document.getElementById('start-btn').addEventListener('click', startGame);
+requestAnimationFrame(loop);
 }
-
 // ----------------------------------------
 function setupLighting() {
   scene.add(new THREE.AmbientLight(0xfff5e0, 0.75));
