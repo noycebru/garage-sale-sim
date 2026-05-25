@@ -50,13 +50,13 @@ function init() {
   }
 
   // Player physics body — sphere approximating a capsule
-  playerBody = new CANNON.Body({ mass: 1, linearDamping: 0.99, angularDamping: 1.0 });
+  playerBody = new CANNON.Body({ mass: 1, linearDamping: 0.15, angularDamping: 1.0 });
   playerBody.addShape(new CANNON.Sphere(0.4));
   playerBody.fixedRotation = true;
   playerBody.updateMassProperties();
   playerBody.allowSleep = false;  // cannon.js 0.6.2 won't wake on velocity write
   const spawn = GameWorld.getSpawnPoint();
-  playerBody.position.set(spawn.x, 0.4, spawn.z);
+  playerBody.position.set(spawn.x, 0.1, spawn.z);
   physicsWorld.addBody(playerBody);
 
   // Init systems
