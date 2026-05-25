@@ -187,6 +187,9 @@ const Player = (() => {
     const len = Math.sqrt(mx * mx + mz * mz);
     if (len > 1) { mx /= len; mz /= len; }
 
+    // cannon.js 0.6.2: wake body explicitly — velocity writes don't auto-wake
+    body.wakeUp();
+
     // Set velocity directly on physics body (no sliding issues)
     body.velocity.x = mx * MOVE_SPEED;
     body.velocity.z = mz * MOVE_SPEED;

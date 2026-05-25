@@ -49,15 +49,12 @@ function init() {
     console.error('[Main] GameWorld.build() threw — house may be incomplete:', e);
   }
 
-  // Player physics body — capsule approximated as sphere
-  const playerShape = new CANNON.Sphere(0.4);
-  playerBody = new CANNON.Body({
-    mass: 1,
-    shape: playerShape,
-    fixedRotation: true,        // don't tip over
-    linearDamping:  0.99,       // stop quickly when no input
-    angularDamping: 1.0,
-  });
+  // Player physics body — sphere approximating a capsule
+  playerBody = new CANNON.Body({ mass: 1, linearDamping: 0.99, angularDamping: 1.0 });
+  playerBody.addShape(new CANNON.Sphere(0.4));
+  playerBody.fixedRotation = true;
+  playerBody.updateMassProperties();
+  playerBody.allowSleep = false;  // cannon.js 0.6.2 won't wake on velocity write
   const spawn = GameWorld.getSpawnPoint();
   playerBody.position.set(spawn.x, 0.4, spawn.z);
   physicsWorld.addBody(playerBody);

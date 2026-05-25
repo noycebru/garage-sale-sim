@@ -587,10 +587,8 @@ const GameWorld = (() => {
 
   // ----------------------------------------
   function addStaticBox(cx, cy, cz, hx, hy, hz) {
-    const body = new CANNON.Body({
-      mass: 0,
-      shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)),
-    });
+    const body = new CANNON.Body({ mass: 0 });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(hx, hy, hz)));
     body.position.set(cx, cy, cz);
     physics.addBody(body);
   }
